@@ -214,7 +214,7 @@ const SURVEY_QUESTIONS = [
 // 把你Firebase專案的設定值貼在下面（Firebase Console -> 專案設定 -> 一般 -> 你的應用程式 -> SDK設定與程式碼）
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDpJuDAn2Klya4jtcZfQ9dfcyoB1M1ZKQE",
-  databaseURL: "https://samo-8191a-default-rtdb.firebaseio.com", // 例如 https://xxxx-default-rtdb.asia-southeast1.firebasedatabase.app
+  databaseURL: "https://samo-8191a-default-rtdb.firebaseio.com",
   projectId: "samo-8191a",
 };
 let fbApp=null, fbDb=null, fbReady=false, fbError=null;
@@ -261,9 +261,26 @@ function initState(hostName){
 }
 
 /* ============ 儲存存取（Firebase Realtime Database） ============ */
+// Firebase會把空陣列/空物件直接刪除，讀回來時對應欄位會變成undefined，
+// 這個函式負責補回所有初始為空集合的欄位，避免畫面讀取.length/.map時炸掉。
+function normalizeState(st){
+ if(!st) return st;
+ st.players = st.players || [];
+ st.turnOrder = st.turnOrder || [];
+ st.assets = st.assets || {};
+ st.messageDeck = st.messageDeck || [];
+ st.fateDeck = st.fateDeck || [];
+ st.surveyPool = st.surveyPool || [];
+ st.storyUnlocked = st.storyUnlocked || [];
+ st.log = st.log || [];
+ st.guesses = st.guesses || [];
+ st.players.forEach(p=>{ p.survey = p.survey || []; });
+ if(st.currentStory) st.currentStory.votes = st.currentStory.votes || {};
+ return st;
+}
 async function loadRoom(code){
  const snap = await roomRef(code).once('value'); // 錯誤直接往外拋，讓呼叫端能顯示真正原因
- return snap.exists()? snap.val(): null;
+ return snap.exists()? normalizeState(snap.val()): null;
 }
 async function safeLoadRoom(code){
  try{ return await loadRoom(code); }catch(e){ console.error(e); return null; }
@@ -275,10 +292,11 @@ async function updateRoom(code, mutator){
  try{
    const res = await roomRef(code).transaction(cur=>{
      if(cur===null || cur===undefined) return cur; // 房間不存在則放棄
+     normalizeState(cur);
      mutator(cur);
      return cur;
    });
-   if(res.committed && res.snapshot.exists()){ STATE = res.snapshot.val(); return STATE; }
+   if(res.committed && res.snapshot.exists()){ STATE = normalizeState(res.snapshot.val()); return STATE; }
    return null;
  }catch(e){ console.error(e); return null; }
 }
@@ -966,7 +984,7 @@ function startPolling(){
  if(unsubRef) { unsubRef.off('value'); }
  const r = roomRef(ROOM);
  r.on('value', snap=>{
-   if(snap.exists()){ STATE = snap.val(); render(); }
+   if(snap.exists()){ STATE = normalizeState(snap.val()); render(); }
  });
  unsubRef = r;
 }
