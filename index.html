@@ -458,7 +458,7 @@ function render(){
    bindEvents();
  }catch(e){
    console.error(e);
-   app.innerHTML = '<div class="card"><h3 class="coraltext">畫面發生錯誤</h3><div class="paper">'+String(e && e.message || e)+'</div><button class="btn-line" id="btnReload" style="margin-top:10px;">重新整理</button></div>';
+   app.innerHTML = '<div class="card"><h3 class="coraltext">畫面發生錯誤</h3><div class="paper">'+String(e && e.message || e)+'</div><button class="btn-line" id="btnReload" style="margin-top:10px;">重新整理</button><div class="muted" style="margin-top:8px;">版本：'+BUILD_VERSION+'</div></div>';
    const rb=document.getElementById('btnReload'); if(rb) rb.onclick=()=>location.reload();
  }
 }
@@ -501,6 +501,7 @@ function viewNeedFirebase(){
  </div>`;
 }
 
+const BUILD_VERSION = 'v4-normalize-fix';
 function viewLanding(){
  return `
  <div style="text-align:center;padding:40px 0 10px;">
@@ -510,6 +511,7 @@ function viewLanding(){
      <button class="btn-gold" id="btnGoHost">我是主畫面（投影幕）</button>
      <button class="btn-line" id="btnGoPlayer">我是玩家（手機）</button>
    </div>
+   <div class="muted" style="margin-top:30px;font-size:11px;opacity:.5;">版本：${BUILD_VERSION}</div>
  </div>`;
 }
 function viewHostCreate(){
