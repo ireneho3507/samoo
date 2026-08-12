@@ -1,0 +1,976 @@
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<style>
+:root{
+  --bg:#161b22; --panel:#1f2733; --panel2:#242e3d;
+  --paper:#f4efe3; --ink:#2a2420;
+  --gold:#d9a441; --coral:#c1554b; --sage:#6b9e78;
+  --muted:#8a97a8; --line:#33404f;
+}
+*{box-sizing:border-box;}
+.grw{ font-family:'Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-serif; background:var(--bg); color:#e8ecf1; min-height:100%; padding:0; margin:0; }
+.grw h1,.grw h2,.grw h3,.grw .disp{ font-family:'Noto Serif TC','PingFang TC',serif; }
+.grw-wrap{ max-width:1100px; margin:0 auto; padding:20px 16px 60px; }
+.grw button{ font-family:inherit; cursor:pointer; border:none; border-radius:8px; padding:10px 16px; font-size:14px; font-weight:600; transition:transform .08s ease, opacity .15s; }
+.grw button:active{ transform:scale(.97); }
+.grw button:disabled{ opacity:.35; cursor:not-allowed; }
+.btn-gold{ background:var(--gold); color:#241a05; }
+.btn-coral{ background:var(--coral); color:#fff0ee; }
+.btn-line{ background:transparent; border:1px solid var(--line) !important; color:#dfe6ee; }
+.btn-sage{ background:var(--sage); color:#0d1f12; }
+.grw input,.grw select,.grw textarea{ font-family:inherit; background:var(--panel2); border:1px solid var(--line); color:#e8ecf1; border-radius:6px; padding:8px 10px; font-size:14px; width:100%; }
+.grw .card{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:14px; }
+.grw .paper{ background:var(--paper); color:var(--ink); border-radius:10px; padding:14px 16px; }
+.grw .muted{ color:var(--muted); font-size:13px; }
+.grw .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+.grw .stamp{ display:inline-block; border:3px solid var(--coral); color:var(--coral); border-radius:50%; padding:6px 12px; font-family:'Noto Serif TC',serif; font-weight:700; transform:rotate(-8deg); font-size:13px; letter-spacing:2px; }
+.grw .pill{ display:inline-block; padding:2px 10px; border-radius:20px; font-size:12px; font-weight:700; background:var(--panel2); border:1px solid var(--line); }
+.grw .goldtext{ color:var(--gold); }
+.grw .coraltext{ color:var(--coral); }
+.grw .sagetext{ color:var(--sage); }
+.grw .roomcode{ font-family:'Noto Serif TC',serif; font-size:42px; letter-spacing:10px; color:var(--gold); font-weight:700; }
+.grw .board{ display:grid; grid-template-columns:repeat(11,minmax(0,1fr)); grid-template-rows:repeat(11,54px); gap:2px; background:var(--panel2); border-radius:10px; padding:6px; }
+.grw .tile{ background:var(--panel); border-radius:4px; font-size:9px; padding:3px; position:relative; overflow:hidden; border:1px solid var(--line); line-height:1.2; }
+.grw .tile b{ display:block; font-size:9.5px; }
+.grw .tile.corner{ background:#2b2416; border-color:var(--gold); }
+.grw .tile.owned{ box-shadow:inset 0 0 0 2px var(--gold); }
+.grw .pawn{ display:inline-block; width:14px; height:14px; border-radius:50%; font-size:9px; text-align:center; line-height:14px; color:#161b22; font-weight:800; margin-right:1px; }
+.grw .center{ grid-column:2/11; grid-row:2/11; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; text-align:center; }
+.grw .playerlist{ display:flex; flex-direction:column; gap:6px; }
+.grw .prow{ display:flex; justify-content:space-between; background:var(--panel2); padding:6px 10px; border-radius:6px; font-size:13px; }
+.grw .prow.active{ outline:2px solid var(--gold); }
+.grw .statgrid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; text-align:center; }
+.grw .statgrid div{ background:var(--panel2); border-radius:8px; padding:8px 4px; }
+.grw .statgrid .n{ font-size:20px; font-weight:800; font-family:'Noto Serif TC',serif; color:var(--gold); }
+.grw .statgrid .l{ font-size:11px; color:var(--muted); }
+.grw .log{ max-height:160px; overflow-y:auto; font-size:12px; color:var(--muted); background:var(--panel2); border-radius:8px; padding:8px 10px; }
+.grw .log div{ margin-bottom:4px; }
+.grw .taskitem{ display:flex; justify-content:space-between; align-items:center; background:var(--panel2); padding:8px 10px; border-radius:8px; margin-bottom:6px; font-size:13px; }
+@media (max-width:720px){
+  .grw .board{ display:none; }
+  .grw-wrap{ padding:14px 10px 50px; }
+}
+</style>
+<div class="grw" id="grwRoot"><div class="grw-wrap" id="grwApp"></div></div>
+<script>
+(function(){
+"use strict";
+
+/* ============ 資料設定 ============ */
+const SIDE_NAME = {A:'系館日常', B:'學術試煉', C:'校園生活', D:'深夜實驗室'};
+
+const TILES = [
+/*0*/ {t:'start', name:'開學迎新日'},
+/*1*/ {t:'asset', name:'系辦公室', side:'A', tier:'低', price:2, rent:1},
+/*2*/ {t:'chance', name:'機會：通知欄'},
+/*3*/ {t:'event', id:'copier', name:'影印機卡紙'},
+/*4*/ {t:'asset', name:'系圖書館', side:'A', tier:'中', price:4, rent:2},
+/*5*/ {t:'fate', name:'命運：茶水間'},
+/*6*/ {t:'asset', name:'教學助理辦公室', side:'A', tier:'中', price:4, rent:2},
+/*7*/ {t:'tax', name:'咖啡機前排隊', amount:1},
+/*8*/ {t:'chance', name:'機會：通知欄'},
+/*9*/ {t:'asset', name:'系館頂樓天台', side:'A', tier:'略高', price:5, rent:2},
+/*10*/ {t:'jail', name:'進度報告地獄'},
+/*11*/ {t:'asset', name:'專題討論課', side:'B', tier:'中', price:5, rent:2},
+/*12*/ {t:'chance', name:'機會：通知欄'},
+/*13*/ {t:'event', id:'journal', name:'期刊投稿'},
+/*14*/ {t:'fate', name:'命運：茶水間'},
+/*15*/ {t:'asset', name:'國際研討會', side:'B', tier:'高', price:8, rent:4,
+        upgrade:{cost:4, rent:7, name:'主題研討會主辦權'}},
+/*16*/ {t:'event', id:'oral', name:'口頭資格考'},
+/*17*/ {t:'chance', name:'機會：通知欄'},
+/*18*/ {t:'asset', name:'實驗室輪值', side:'B', tier:'中', price:6, rent:3},
+/*19*/ {t:'event', id:'defense', name:'論文口試'},
+/*20*/ {t:'pool', name:'系辦共用冰箱'},
+/*21*/ {t:'asset', name:'學生宿舍', side:'C', tier:'低', price:2, rent:1},
+/*22*/ {t:'chance', name:'機會：通知欄'},
+/*23*/ {t:'event', id:'welcome', name:'系學會迎新茶會'},
+/*24*/ {t:'fate', name:'命運：茶水間'},
+/*25*/ {t:'asset', name:'校外打工', side:'C', tier:'中', price:4, rent:2},
+/*26*/ {t:'event', id:'social', name:'系際聯誼'},
+/*27*/ {t:'chance', name:'機會：通知欄'},
+/*28*/ {t:'asset', name:'學校健身房', side:'C', tier:'中', price:4, rent:2},
+/*29*/ {t:'event', id:'bbq', name:'系烤肉趴'},
+/*30*/ {t:'gotojail', name:'教授突襲抽查'},
+/*31*/ {t:'asset', name:'深夜實驗室', side:'D', tier:'高', price:9, rent:4,
+        upgrade:{cost:5, rent:8, name:'重點實驗室'}},
+/*32*/ {t:'chance', name:'機會：通知欄'},
+/*33*/ {t:'event', id:'mystery', name:'學長姐的神秘數據'},
+/*34*/ {t:'fate', name:'命運：茶水間'},
+/*35*/ {t:'asset', name:'精密儀器室', side:'D', tier:'高', price:8, rent:4,
+        upgrade:{cost:4, rent:7, name:'校級核心設施'}},
+/*36*/ {t:'story', name:'系館鬼故事'},
+/*37*/ {t:'chance', name:'機會：通知欄'},
+/*38*/ {t:'asset', name:'24小時便利商店', side:'D', tier:'低', price:3, rent:1},
+/*39*/ {t:'event', id:'showcase', name:'畢業展前夕'},
+];
+
+const MESSAGE_CARDS = [
+ {txt:'【教授來信】主旨：明天上午十點Meeting。', fx:s=>({moveTo:11})},
+ {txt:'【教務系統通知】您的修課學分尚未達標，請盡速加選。', fx:s=>({rel:-2})},
+ {txt:'【口試委員來信】口試時間確定為下週三，請準備完整書面資料。', fx:s=>({moveTo:19})},
+ {txt:'【LINE群組・實驗室戰隊】師兄：「今晚十點趕論文！」', fx:s=>({d:{inspiration:1, stamina:-1}})},
+ {txt:'【系辦Email】您有一筆研究生獎助學金入帳。', fx:s=>({d:{funds:4}})},
+ {txt:'【教授來信】附件是我劃記的修改意見，麻煩這週修完。', fx:s=>({drawFate:true})},
+ {txt:'【Gmail・期刊系統】您的稿件已轉交新任編輯審理，審查延宕。', fx:s=>({skip:true})},
+ {txt:'【室友訊息】欸你今晚要不要一起訂飲料？', fx:s=>({d:{funds:-1, stamina:1}})},
+ {txt:'【教授來信】計畫要交期末報告了，這週務必進實驗室。', fx:s=>({moveTo:31})},
+ {txt:'【系統通知】您的印表機額度已用罄。', fx:s=>({d:{funds:-2}})},
+ {txt:'【教授Email】我人在國外開會，這週meeting先取消。', fx:s=>({d:{stamina:2}})},
+ {txt:'【學術社群通知】您的論文被引用了一次！', fx:s=>({d:{favor:1, inspiration:1}})},
+ {txt:'【教授深夜訊息】23:47：「還有在線上嗎？」', fx:s=>({d:{favor:1, stamina:-1}})},
+ {txt:'【系辦公告】研究生宿舍水電費調漲通知。', fx:s=>({d:{funds:-1}})},
+ {txt:'【教授來信】恭喜，你的計畫書通過初審！', fx:s=>({rel:5, d:{gp:1}})},
+ {txt:'【共同作者群組】論文被拒了，重新討論分工。', fx:s=>({d:{funds:-1}})},
+ {txt:'【行事曆提醒】明天是畢業論文口試繳交期限。', fx:s=>({moveTo:39})},
+ {txt:'【教授來信】你上次報告做得不錯，幫我帶下週的meeting吧。', fx:s=>({d:{favor:2, stamina:-1}})},
+ {txt:'【系統通知】獎學金申請資格審核中，請耐心等候。', fx:s=>({})},
+ {txt:'【教授已讀不回三天後突然回】喔對了，下週要不要一起去研討會？', fx:s=>({moveTo:15})},
+ {txt:'【未知號碼來電】深夜十一點，一通陌生號碼打來：「……妳還在系館嗎？」', fx:s=>({triggerStory:true})},
+];
+
+const FATE_CARDS = [
+ '在茶水間遇到學長，他請你說個笑話炒熱氣氛。（冷場則-1體力）',
+ '室友關心你最近和指導教授相處得怎麼樣？（分享一段故事）',
+ '學姐問你，當初為什麼會選這個研究所／這個題目？',
+ '深夜LINE群組突然有人問：「你覺得你們這屆誰最有可能延畢？」',
+ '系烤肉時有人問：你研究生生涯目前為止最爽的一天是哪天？',
+ '學長問：你有沒有最看不慣誰的什麼地方？',
+ '電梯裡巧遇教授本人，他隨口問：「最近論文寫得怎麼樣了？」（現場編一段進度報告）',
+ '深夜實驗室裡有人問：你有沒有偷偷幫系上哪個教授取過綽號？現場公開一次。',
+ '系學會突然發起口頭調查：如果可以重選一次，你還會念研究所嗎？',
+ '有人在Dcard上發文吐槽某個「口頭禪很多的教授」，猜猜是誰？（模仿一句）',
+ '學姐問：說一件你曾經在背後偷偷抱怨過某人的事，慶幸對方到現在都還不知道？',
+ '深夜有人在群組丟一句：「說一件你覺得如果被教授知道你就死定了的事。」',
+ '有人問：你研究所生涯最想放棄的那一刻，是什麼契機讓你撐過去的？',
+ '假設性提問：如果你可以對系上任何一個人惡作劇一次，且保證不會被抓包，你會做什麼？',
+ '有人問：如果可以跟教授交換一天身分，你第一件事想做什麼？',
+ '學長爆料說系上流傳一個「都市傳說」，內容跟在場某人有關（自由發揮編一段）',
+ '深夜訊息突然彈出：「老實說，你覺得自己現在的進度騙得過教授嗎？」',
+ '有人問：你有沒有故意避開某個同學一起做報告？為什麼？',
+];
+const SURVEY_CARD_MARKER = '__SURVEY__';
+
+const HIDDEN_TASKS = [
+ {id:'t1', name:'偷拍3位玩家「正在吃東西」的瞬間', target:3, tier:1},
+ {id:'t2', name:'不被發現地模仿3位玩家的口頭禪或小動作', target:3, tier:1},
+ {id:'t3', name:'不被察覺地主動幫3位玩家倒水／遞東西', target:3, tier:1},
+ {id:'t4', name:'趁別人沒注意，偷偷把另一位玩家的隨身小物調換位置', target:3, tier:2},
+ {id:'t5', name:'不被發現地促成2位玩家聊起同一個話題', target:2, tier:2},
+ {id:'t6', name:'記住某玩家的資源，結束前準確說出他的經費或GP', target:1, tier:2},
+ {id:'t7', name:'找機會讓另一位玩家主動稱讚你一次', target:1, tier:2},
+];
+
+const STORY_CHAPTERS = [
+ {id:'c1', title:'meeting前十分鐘',
+  text:'小研翻遍書包，發現昨晚熬夜到四點做的簡報檔案不見了。手機瘋狂震動，是教授連續傳來的訊息，她心虛地已讀不回了三次，對方終於忍不住直接打了語音電話進來。她手滑接起，卻不小心先按到擴音——全實驗室都聽到教授說：「大家都已經在會議室等妳報告了，妳現在要老實跟我說發生什麼事，還是要我先幫妳跟大家周旋一下？」',
+  a:{label:'老實坦白：「教授，我檔案不見了……」', fx:s=>({xiaoyan:-1, allD:{inspiration:1}})},
+  b:{label:'死撐到底：「教授我五分鐘後到！」', fx:s=>({allD:{funds:-1}, triggerD:{gp:1}})}},
+ {id:'c2', title:'電梯裡的十五秒',
+  text:'小研跟指導教授一起卡進電梯，兩人大眼瞪小眼。電梯突然停電，警報器狂響，教授竟然沒有慌，反而幽幽開口聊起當年博班往事。警衛在外面大喊：「還要十分鐘才能修好！」',
+  a:{label:'乾脆坐下來，示意教授繼續講', fx:s=>({xiaoyan:3, allD:{inspiration:-1}})},
+  b:{label:'假裝訊號不好，猛滑手機轉移話題', fx:s=>({triggerD:{funds:2}})}},
+ {id:'c3', title:'論文口試前一晚的托夢',
+  text:'小研夢到自己口試時PPT全部變成貓咪迷因圖，口試委員笑到假牙都飛出來。她驚醒，發現枕頭旁邊真的躺著一隻陌生的貓，貓嘴裡叼著一張寫著她論文關鍵字的紙條。',
+  a:{label:'把貓抱去研究室當「口試吉祥物」', fx:s=>({xiaoyan:-1, triggerD:{gp:1}})},
+  b:{label:'把托夢當警訊，連夜重做整份簡報', fx:s=>({triggerD:{stamina:-2, inspiration:3}, allD:{funds:1}})}},
+ {id:'c4', title:'系烤肉趴的告白事故',
+  text:'小研喝了兩杯調酒，鬼使神差地站上椅子，對全系大喊：「其實我一直覺得那個常常穿緊身衣、練得很有腹肌的學長很帥！」全場瞬間安靜，音樂剛好在這時候停了。',
+  a:{label:'死不承認，硬拗成「我是在說偶像劇男主角」', fx:s=>({allD:{inspiration:-1}})},
+  b:{label:'豁出去了，順勢再補一句更誇張的告白', fx:s=>({allD:{funds:2}, triggerD:{gp:1}})}},
+ {id:'c5', title:'深夜辦公室的都市傳說驗證',
+  text:'系館流傳一個傳說：晚上十一點對著影印機唸三次教授的名字，機器會吐出一張寫著論文題目的紙。小研半信半疑試了，機器發出詭異嗡鳴，真的吐出一張紙——同一秒，手機也收到教授訊息：「妳還在系館嗎？我有東西忘記拿。」',
+  a:{label:'打開紙條看', fx:s=>({triggerD:{gp:2}, xiaoyan:-1})},
+  b:{label:'嚇到直接把紙揉掉丟進垃圾桶', fx:s=>({allD:{stamina:1}})}},
+ {id:'c6', title:'畢業典禮前的最後一封信',
+  text:'小研收到教授寄來的信，主旨只寫「有件事想跟妳說」。點開附件，是一張教授大學時代穿誇張喇叭褲、留爆炸頭的畢業照，配文只有一句：「妳畢業了，我也老了。」',
+  a:{label:'回信虧教授：「你當年也太潮了吧」', fx:s=>({xiaoyan:2, allD:{funds:1}})},
+  b:{label:'已讀不回，假裝沒看到', fx:s=>({xiaoyan:-1, allD:{inspiration:-1}})}},
+];
+const FINAL_CHAPTER = {
+ id:'final', title:'終章・畢業前夕的抉擇',
+ text:'最後一堂課下課，小研收到系辦轉來的一份續聘公告——系上多出一個專案助理的缺，教授私下問她要不要考慮留下來。她盯著那封信看了很久，窗外的鳳凰花開得正好，跟她剛入學那年一模一樣。',
+ a:{label:'留下來，接下這個位置 →「薪火相傳」', fx:s=>({})},
+ b:{label:'婉拒，帶著這幾年的故事離開 →「瀟灑轉身」', fx:s=>({})},
+};
+
+const FAVOR_MENU = [
+ {id:'jail', name:'教授通融一次', cost:2, desc:'立即跳出進度報告地獄'},
+ {id:'toll', name:'網開一面', cost:2, desc:'免除本次應繳通行費'},
+ {id:'peek', name:'偷看一眼', cost:3, desc:'翻開下一張機會／命運卡，可選擇要不要抽'},
+ {id:'auto', name:'教授特別放水', cost:4, desc:'停留在期刊投稿／口頭資格考時，直接視為最佳結果'},
+];
+
+const SURVEY_QUESTIONS = [
+ '你最不想讓教授發現的小秘密是什麼？',
+ '如果你的研究題目要拍成電影，片名會叫什麼？',
+ '用一個梗圖／表情包形容你現在的心情',
+ '你研究所生涯做過最丟臉的一件事是？',
+ '如果可以偷偷跟教授說一句真心話，你會說什麼？',
+ '用三個字形容你的指導教授',
+];
+
+/* ============ Firebase 設定 ============ */
+// 把你Firebase專案的設定值貼在下面（Firebase Console -> 專案設定 -> 一般 -> 你的應用程式 -> SDK設定與程式碼）
+const FIREBASE_CONFIG = {
+  apiKey: "PASTE_YOUR_API_KEY",
+  databaseURL: "PASTE_YOUR_DATABASE_URL", // 例如 https://xxxx-default-rtdb.asia-southeast1.firebasedatabase.app
+  projectId: "PASTE_YOUR_PROJECT_ID",
+};
+let fbApp=null, fbDb=null, fbReady=false, fbError=null;
+function fbConfigured(){
+  return FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey.indexOf('PASTE_')!==0
+      && FIREBASE_CONFIG.databaseURL && FIREBASE_CONFIG.databaseURL.indexOf('PASTE_')!==0;
+}
+function initFirebase(){
+  if(fbReady || !fbConfigured()) return fbReady;
+  try{
+    fbApp = firebase.initializeApp(FIREBASE_CONFIG);
+    fbDb = firebase.database();
+    fbReady = true;
+  }catch(e){ fbError = String(e); fbReady=false; }
+  return fbReady;
+}
+
+/* ============ 共用工具 ============ */
+function shuffle(arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function roomRef(code){ return fbDb.ref('rooms/'+code); }
+function genCode(){ const chars='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++) s+=chars[Math.floor(Math.random()*chars.length)]; return s; }
+function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
+function aKey(i){ return 't'+i; } // 資產格key加前綴，避免Firebase把純數字索引物件誤判成陣列
+function newPlayer(id,name){
+ return { id, name, pos:0, funds:6, inspiration:2, stamina:5, favor:0, gp:0,
+   survey:[], hiddenTaskId:null, taskProgress:0, taskDone:false, taskAnnounced:false,
+   jailCount:0, bankruptCount:0, guessCorrect:0, guessWrong:0, guessedAgainstCount:0,
+   taskDoneRound:null, inJail:false, favorUsedThisTurn:false };
+}
+function initState(hostName){
+ return {
+   phase:'setup', // setup -> playing -> ended
+   players:[], turnOrder:[], currentIdx:0, round:1,
+   assets:{}, // tileIndex -> ownerId, upgraded:bool
+   pool:0,
+   messageDeck:shuffle(MESSAGE_CARDS.map((_,i)=>i)),
+   fateDeck:shuffle(FATE_CARDS.map((_,i)=>i).concat([SURVEY_CARD_MARKER,SURVEY_CARD_MARKER,SURVEY_CARD_MARKER,SURVEY_CARD_MARKER])),
+   surveyPool:[], // {owner,q,a,used}
+   storyUnlocked:[], xiaoyanFavor:0, currentStory:null, finalResolved:false, finalEnding:null,
+   log:[], lastCard:null, lastEvent:null,
+   guesses:[], // {guesserId,targetId,taskId,correct}
+   ended:false,
+ };
+}
+
+/* ============ 儲存存取（Firebase Realtime Database） ============ */
+async function loadRoom(code){
+ const snap = await roomRef(code).once('value'); // 錯誤直接往外拋，讓呼叫端能顯示真正原因
+ return snap.exists()? snap.val(): null;
+}
+async function safeLoadRoom(code){
+ try{ return await loadRoom(code); }catch(e){ console.error(e); return null; }
+}
+async function saveRoom(code, state){
+ try{ await roomRef(code).set(state); }catch(e){ console.error(e); }
+}
+async function updateRoom(code, mutator){
+ try{
+   const res = await roomRef(code).transaction(cur=>{
+     if(cur===null || cur===undefined) return cur; // 房間不存在則放棄
+     mutator(cur);
+     return cur;
+   });
+   if(res.committed && res.snapshot.exists()){ STATE = res.snapshot.val(); return STATE; }
+   return null;
+ }catch(e){ console.error(e); return null; }
+}
+function pushLog(state, txt){ if(!state.log) state.log=[]; state.log.unshift(txt); if(state.log.length>60) state.log.length=60; }
+
+/* ============ 遊戲邏輯 ============ */
+function ownedSideComplete(state, side, ownerId){
+ const idxs = TILES.map((t,i)=>({t,i})).filter(x=>x.t.t==='asset'&&x.t.side===side).map(x=>x.i);
+ return idxs.every(i=> state.assets[aKey(i)] && state.assets[aKey(i)].owner===ownerId);
+}
+function rentFor(state, tileIdx){
+ const tile=TILES[tileIdx]; const a=state.assets[aKey(tileIdx)];
+ let rent = a && a.upgraded ? tile.upgrade.rent : tile.rent;
+ if(ownedSideComplete(state, tile.side, a.owner)) rent*=2;
+ return rent;
+}
+function findPlayer(state,id){ return state.players.find(p=>p.id===id); }
+function applyDelta(p, d){
+ if(!d) return;
+ if(d.funds) p.funds+=d.funds;
+ if(d.inspiration) p.inspiration+=d.inspiration;
+ if(d.stamina) p.stamina=clamp(p.stamina+d.stamina,0,5);
+ if(d.favor) p.favor=clamp(p.favor+d.favor,-5,5);
+ if(d.gp) p.gp+=d.gp;
+ if(p.funds<0){ p.funds=2; p.pos=10; p.inJail=true; p.bankruptCount++; }
+}
+function sendToJail(p){ p.pos=10; p.inJail=true; p.jailCount++; }
+
+function resolveTile(state, p, tileIdx, log){
+ const tile = TILES[tileIdx];
+ if(tile.t==='start'){ /* handled on pass */ }
+ else if(tile.t==='jail'){ /* visiting only, no effect unless sent */ }
+ else if(tile.t==='gotojail'){ sendToJail(p); log.push(p.name+' 被教授突襲抽查，直接送進進度報告地獄！'); }
+ else if(tile.t==='pool'){ p.funds+=state.pool; p.stamina=clamp(p.stamina+2,0,5); log.push(p.name+' 翻找共用冰箱，獲得獎池 '+state.pool+' 經費！'); state.pool=0; }
+ else if(tile.t==='tax'){ state.pool+=tile.amount; p.funds-=tile.amount; log.push(p.name+' 在'+tile.name+'繳了 '+tile.amount+' 經費進獎池。'); }
+ else if(tile.t==='asset'){
+   const a = state.assets[aKey(tileIdx)];
+   if(!a){
+     p._canClaim = tileIdx; // UI will show claim button
+   } else if(a.owner!==p.id){
+     const rent = rentFor(state, tileIdx);
+     p.funds -= rent; findPlayer(state,a.owner).funds += rent;
+     log.push(p.name+' 經過'+tile.name+'，付了 '+rent+' 經費通行費給 '+findPlayer(state,a.owner).name+'。');
+   } else { p._canUpgrade = tileIdx; }
+ }
+ else if(tile.t==='chance'){ drawMessageCard(state,p,log); }
+ else if(tile.t==='fate'){ drawFateCard(state,p,log); }
+ else if(tile.t==='story'){ p._triggerStory=true; }
+ else if(tile.t==='event'){ resolveEvent(state,p,tile,log); }
+}
+
+function resolveEvent(state,p,tile,log){
+ switch(tile.id){
+  case 'copier':
+   if(Math.random()<0.5){ p.stamina=clamp(p.stamina-1,0,5); log.push(p.name+' 印表機卡紙，損失1體力。'); }
+   else { drawMessageCard(state,p,log); log.push(p.name+' 印表機卡紙，補一張訊息卡。'); }
+   break;
+  case 'journal':{
+   const r=Math.ceil(Math.random()*6);
+   if(r<=2){ p.funds-=3; movePlayer(state,p,-6,log,true); log.push(p.name+' 期刊投稿被 Reject，經費-3、倒退6格。'); }
+   else if(r<=4){ p.stamina=clamp(p.stamina-2,0,5); log.push(p.name+' 收到 Major Revision，原地不動、扣2體力。'); }
+   else { p.gp+=3; p.inspiration+=5; movePlayer(state,p,3,log,true); log.push(p.name+' 期刊投稿 Accept！GP+3、靈感值+5、前進3格。'); }
+   break;}
+  case 'oral':{
+   const r=Math.ceil(Math.random()*6);
+   if(r>=4){ p.gp+=2; p.favor=clamp(p.favor+2,-5,5); log.push(p.name+' 口頭資格考通過！GP+2、好感度+2。'); }
+   else { p.favor=clamp(p.favor-1,-5,5); const prevCorner=[0,10,20,30].filter(c=>c<=p.pos).pop()||0; p.pos=prevCorner; log.push(p.name+' 口頭資格考沒過，退回上一個轉角格、好感度-1。'); }
+   break;}
+  case 'defense':{
+   const r=Math.ceil(Math.random()*6);
+   if(r>=4){ p.gp+=5; log.push(p.name+' 論文口試通過！GP+5！'); }
+   else { sendToJail(p); log.push(p.name+' 論文口試失敗，被關進進度報告地獄。'); }
+   break;}
+  case 'welcome':
+   state.players.forEach(pl=>pl.funds+=1);
+   log.push('系學會迎新茶會，全場玩家經費+1。');
+   break;
+  case 'social':
+   p.inspiration+=1; log.push(p.name+' 參加系際聯誼，靈感值+1。');
+   break;
+  case 'bbq':
+   if(p.funds>=1){ p.funds-=1; p.stamina=clamp(p.stamina+1,0,5); log.push(p.name+' 參加系烤肉趴，花1經費回1體力。'); }
+   break;
+  case 'mystery':
+   if(Math.random()<0.5){ p.funds+=5; log.push(p.name+' 挖到學長姐的神秘數據寶藏，經費+5！'); }
+   else { movePlayer(state,p,-5,log,true); log.push(p.name+' 觸發神秘數據詛咒，倒退5格！'); }
+   break;
+  case 'showcase':{
+   const r=Math.ceil(Math.random()*6);
+   if(r>=4){ p.gp+=1; p.favor=clamp(p.favor+1,-5,5); log.push(p.name+' 畢業展前夕士氣高昂，GP+1、好感度+1。'); }
+   else { p.stamina=clamp(p.stamina-1,0,5); log.push(p.name+' 畢業展前夕壓力山大，體力-1。'); }
+   break;}
+ }
+}
+
+function movePlayer(state,p,steps,log,noStartBonus){
+ const old=p.pos;
+ p.pos = (p.pos + steps + 400) % 40;
+ if(!noStartBonus && steps>0 && p.pos<old){ p.funds+=2; p.inspiration+=3; log.push(p.name+' 經過起點，獲得新生大禮包：靈感值+3、經費+2。'); }
+}
+
+function drawMessageCard(state,p,log){
+ if(state.messageDeck.length===0) state.messageDeck=shuffle(MESSAGE_CARDS.map((_,i)=>i));
+ const idx = state.messageDeck.pop();
+ const card = MESSAGE_CARDS[idx];
+ state.lastCard = {type:'message', text:card.txt, player:p.name};
+ const r = card.fx();
+ if(r.moveTo!==undefined) p.pos=r.moveTo;
+ if(r.rel!==undefined) movePlayer(state,p,r.rel,log,true);
+ if(r.d) applyDelta(p,r.d);
+ if(r.drawFate) drawFateCard(state,p,log);
+ if(r.triggerStory) p._triggerStory=true;
+ log.push(p.name+' 抽到機會卡：'+card.txt);
+}
+function drawFateCard(state,p,log){
+ if(state.fateDeck.length===0) state.fateDeck=shuffle(FATE_CARDS.map((_,i)=>i).concat([SURVEY_CARD_MARKER,SURVEY_CARD_MARKER,SURVEY_CARD_MARKER,SURVEY_CARD_MARKER]));
+ const idx = state.fateDeck.pop();
+ if(idx===SURVEY_CARD_MARKER){
+   const pool = state.surveyPool.filter(s=>!s.used);
+   if(pool.length===0){ state.lastCard={type:'fate', text:'（問卷已經抽完囉，全場自由聊天一下）', player:p.name}; log.push(p.name+' 抽到問卷回收卡，但問卷已抽完。'); return; }
+   const pick = pool[Math.floor(Math.random()*pool.length)];
+   pick.used=true;
+   state.lastCard = {type:'survey', text:'系學會問卷回收：「'+pick.a+'」全場搶答：這是誰寫的？', player:p.name, surveyOwner:pick.owner, q:pick.q};
+   log.push(p.name+' 抽到問卷回收卡：「'+pick.a+'」');
+ } else {
+   state.lastCard = {type:'fate', text:FATE_CARDS[idx], player:p.name};
+   log.push(p.name+' 抽到命運卡：'+FATE_CARDS[idx]);
+ }
+}
+
+function computeTitles(state){
+ const ps=state.players;
+ function top(fn){ return ps.slice().sort((a,b)=>fn(b)-fn(a))[0]; }
+ return [
+  {title:'最速畢業生', who:top(p=>p.gp).name, why:'GP最高'},
+  {title:'萬年苦主', who:top(p=>p.jailCount).name, why:'進監獄次數最多'},
+  {title:'人緣王', who:top(p=>p.favor).name, why:'好感度最高'},
+  {title:'白老鼠代表', who:top(p=>p.bankruptCount).name, why:'破產次數最多'},
+  {title:'心機偵探', who:top(p=>p.guessCorrect).name, why:'猜中次數最多'},
+  {title:'社死之王', who:top(p=>p.guessedAgainstCount).name, why:'被猜中次數最多'},
+  {title:'財力雄厚', who:top(p=>p.funds).name, why:'經費最高'},
+ ];
+}
+function personalEnding(p){
+ if(p.gp>=8 && p.favor>=2) return {name:'順利畢業・薪火相傳', text:'口試委員陸續在成績單上簽下名字。教授在門口等你，遞給你一杯咖啡：「走吧，我請你吃飯。」'};
+ if(p.gp>=8 && p.favor<=-2) return {name:'順利畢業・恩斷義絕', text:'口試通過的那一刻，你反而沒什麼特別的情緒。教授只回了一句「辛苦了」，已讀時間停在三天前。'};
+ if(p.gp<4 && p.favor>=2) return {name:'轉職業界・帶著祝福離開', text:'你把離開學術這條路的決定告訴教授，他點點頭，默默幫你寫了一封很用心的推薦信。'};
+ if(p.gp<4 && p.favor<=-2) return {name:'不歡而散・黯然離場', text:'最後一次meeting，你們吵了起來。你收拾東西，沒等他回應就走了。'};
+ return {name:'延畢一年・捲土重來', text:'成績單上那個熟悉的「未通過」，你嘆了口氣。「我再拼一次。」你傳訊息給教授，對方秒回：「好，這次我陪你一起想辦法。」'};
+}
+
+/* ============ 前端狀態 / 畫面 ============ */
+let ROLE=null, ROOM=null, MYID=null, MYNAME=null, STATE=null, POLL=null;
+const app = document.getElementById('grwApp');
+
+function render(){
+ try{
+   app.innerHTML = renderView();
+   bindEvents();
+ }catch(e){
+   console.error(e);
+   app.innerHTML = '<div class="card"><h3 class="coraltext">畫面發生錯誤</h3><div class="paper">'+String(e && e.message || e)+'</div><button class="btn-line" id="btnReload" style="margin-top:10px;">重新整理</button></div>';
+   const rb=document.getElementById('btnReload'); if(rb) rb.onclick=()=>location.reload();
+ }
+}
+window.addEventListener('error', (e)=>{
+ console.error('window error', e.error||e.message);
+ const el=document.getElementById('grwApp');
+ if(el) el.insertAdjacentHTML('afterbegin', '<div class="card"><h3 class="coraltext">發生錯誤</h3><div class="paper">'+String((e.error&&e.error.message)||e.message||e)+'</div></div>');
+});
+window.addEventListener('unhandledrejection', (e)=>{
+ console.error('unhandled rejection', e.reason);
+ const el=document.getElementById('grwApp');
+ if(el) el.insertAdjacentHTML('afterbegin', '<div class="card"><h3 class="coraltext">連線發生錯誤</h3><div class="paper">'+String((e.reason&&e.reason.message)||e.reason)+'</div></div>');
+});
+
+function renderView(){
+ if(!fbConfigured()) return viewNeedFirebase();
+ if(!fbReady) initFirebase();
+ if(!ROLE) return viewLanding();
+ if(ROLE==='host' && !ROOM) return viewHostCreate();
+ if(ROLE==='player' && !ROOM) return viewPlayerJoin();
+ if(!STATE) return '<div class="card">連線中…</div>';
+ if(STATE.phase==='setup') return ROLE==='host'? viewHostSetup(): viewPlayerSetup();
+ if(STATE.phase==='playing') return ROLE==='host'? viewHostBoard(): viewPlayerMain();
+ if(STATE.phase==='ended') return viewEnded();
+ return '';
+}
+function viewNeedFirebase(){
+ return `
+ <div class="card">
+   <h2>需要先設定 Firebase</h2>
+   <p class="muted">這個遊戲需要一個免費的 Firebase 即時資料庫來同步所有玩家的資料。請主辦人依照以下步驟操作一次即可：</p>
+   <ol class="muted" style="line-height:1.9;">
+     <li>前往 <b>console.firebase.google.com</b>，用Google帳號登入，建立新專案（免費）</li>
+     <li>左側選單找「Realtime Database」，建立資料庫，安全規則先選「測試模式」</li>
+     <li>左側「專案設定」→「一般」→ 往下滑到「你的應用程式」，新增一個「網頁」應用程式</li>
+     <li>複製顯示出來的 firebaseConfig 設定值</li>
+     <li>打開這個HTML檔案，找到最上面 <code>FIREBASE_CONFIG</code> 的地方，把 apiKey / databaseURL / projectId 貼上去，存檔</li>
+   </ol>
+   ${fbError? `<div class="paper" style="margin-top:10px;">初始化錯誤：${fbError}</div>`:''}
+ </div>`;
+}
+
+function viewLanding(){
+ return `
+ <div style="text-align:center;padding:40px 0 10px;">
+   <div class="disp" style="font-size:30px;font-weight:700;">《延畢邊緣》</div>
+   <div class="muted" style="margin-bottom:24px;">研究生大富翁・線上版</div>
+   <div class="row" style="justify-content:center;">
+     <button class="btn-gold" id="btnGoHost">我是主畫面（投影幕）</button>
+     <button class="btn-line" id="btnGoPlayer">我是玩家（手機）</button>
+   </div>
+ </div>`;
+}
+function viewHostCreate(){
+ return `
+ <div class="card" style="text-align:center;">
+   <h2>建立房間</h2>
+   <p class="muted">按下按鈕產生房間代碼，讓玩家用手機輸入代碼加入。</p>
+   <button class="btn-gold" id="btnCreateRoom">建立新房間</button>
+ </div>`;
+}
+function viewPlayerJoin(){
+ return `
+ <div class="card">
+   <h2>加入房間</h2>
+   <div class="row" style="flex-direction:column;align-items:stretch;">
+     <label class="muted">房間代碼</label>
+     <input id="inCode" maxlength="4" style="text-transform:uppercase;letter-spacing:4px;font-size:20px;text-align:center;" placeholder="例如 A7X2">
+     <label class="muted" style="margin-top:8px;">你的名字</label>
+     <input id="inName" placeholder="輸入你的名字">
+     <button class="btn-gold" id="btnJoin" style="margin-top:12px;">加入</button>
+     <div id="joinErr" class="coraltext muted"></div>
+   </div>
+ </div>`;
+}
+function viewHostSetup(){
+ const s=STATE;
+ return `
+ <div class="card" style="text-align:center;">
+   <div class="muted">房間代碼</div>
+   <div class="roomcode">${ROOM}</div>
+   <div class="muted">請玩家用手機打開同一個連結，選「我是玩家」並輸入這個代碼</div>
+ </div>
+ <div class="card">
+   <h3>目前玩家（${s.players.length}）</h3>
+   <div class="playerlist">${s.players.map(p=>`<div class="prow"><span>${p.name}</span><span class="muted">${p.survey.length>=6?'✅ 已填問卷':'⏳ 填寫中'}</span></div>`).join('')||'<div class="muted">等待玩家加入…</div>'}</div>
+   <div class="row" style="margin-top:12px;">
+     <button class="btn-gold" id="btnStartGame" ${s.players.length<2?'disabled':''}>開始遊戲（隨機分配隱藏任務）</button>
+   </div>
+   <div class="muted" style="margin-top:6px;">建議所有玩家都填完問卷再開始，未填完也可以直接開始。</div>
+ </div>`;
+}
+function viewPlayerSetup(){
+ const p = findPlayer(STATE, MYID);
+ if(!p) return '<div class="card">找不到你的資料，請重新整理頁面加入。</div>';
+ const done = p.survey.length>=6;
+ return `
+ <div class="card">
+   <h3>嗨，${p.name}</h3>
+   <p class="muted">開學前先填一份新生入學問卷（匿名，會混進命運卡的問卷回收環節）</p>
+   ${done? '<div class="paper">✅ 問卷已送出，等待主辦人開始遊戲…</div>' : `
+   <div id="surveyForm">
+     ${SURVEY_QUESTIONS.map((q,i)=>`<div style="margin-bottom:8px;"><label class="muted">${i+1}. ${q}</label><input class="svInput" data-i="${i}"></div>`).join('')}
+     <button class="btn-gold" id="btnSubmitSurvey">送出問卷</button>
+   </div>`}
+ </div>`;
+}
+
+function tileClassFor(i){ return [0,10,20,30].includes(i)?'tile corner':'tile'; }
+function tileGridStyle(i){
+ let row,col;
+ if(i<=10){ row=11; col=11-i; }
+ else if(i<=20){ row=11-(i-10); col=1; }
+ else if(i<=30){ row=1; col=1+(i-20); }
+ else { row=1+(i-30); col=11; }
+ return `grid-row:${row};grid-column:${col};`;
+}
+const PAWN_COLORS=['#d9a441','#c1554b','#6b9e78','#7fa8d9','#c07fd9','#d9c17f'];
+function boardHTML(){
+ const s=STATE;
+ let html='<div class="board">';
+ for(let i=0;i<40;i++){
+   const tile=TILES[i];
+   const owner = s.assets[aKey(i)]? findPlayer(s,s.assets[aKey(i)].owner):null;
+   const pawnsHere = s.players.filter(p=>p.pos===i);
+   html+=`<div class="${tileClassFor(i)}" style="${tileGridStyle(i)}${owner?';box-shadow:inset 0 0 0 2px '+PAWN_COLORS[s.players.indexOf(owner)%6]:''}">`+
+     `<b>${i}</b>${tile.name}`+
+     `<div>${pawnsHere.map(p=>`<span class="pawn" style="background:${PAWN_COLORS[s.players.indexOf(p)%6]}" title="${p.name}">${p.name[0]}</span>`).join('')}</div>`+
+     `</div>`;
+ }
+ html+=`<div class="center">
+   <div class="disp" style="font-size:16px;">第 ${s.round} 輪</div>
+   <div class="muted">獎池：${s.pool} 經費　｜　小研好感度：${s.xiaoyanFavor}</div>
+   <div class="muted">已解鎖章節：${s.storyUnlocked.length}/6</div>
+ </div>`;
+ html+='</div>';
+ return html;
+}
+
+function viewHostBoard(){
+ const s=STATE;
+ const cur = s.players[s.currentIdx];
+ return `
+ <div class="row" style="align-items:flex-start;">
+   <div style="flex:2;min-width:320px;">${boardHTML()}</div>
+   <div style="flex:1;min-width:260px;">
+     <div class="card">
+       <h3>玩家</h3>
+       <div class="playerlist">
+       ${s.players.map((p,i)=>`<div class="prow ${i===s.currentIdx?'active':''}"><span><span class="pawn" style="background:${PAWN_COLORS[i%6]}">${p.name[0]}</span> ${p.name}</span><span>💰${p.funds} 💡${p.inspiration} ⚡${p.stamina} ❤️${p.favor} 🎓${p.gp}</span></div>`).join('')}
+       </div>
+     </div>
+     ${s.currentStory? storyPanelHTML(s):''}
+     ${s.lastCard? `<div class="card"><div class="pill">${s.lastCard.player} 抽到</div><div class="paper" style="margin-top:8px;">${s.lastCard.text}</div></div>`:''}
+     <div class="card">
+       <h3>紀錄</h3>
+       <div class="log">${s.log.map(l=>`<div>${l}</div>`).join('')}</div>
+     </div>
+     <div class="card">
+       <button class="btn-coral" id="btnEndGame">結束遊戲並結算</button>
+     </div>
+   </div>
+ </div>`;
+}
+function storyPanelHTML(s){
+ const story = s.currentStory;
+ const ch = story.isFinal? FINAL_CHAPTER: STORY_CHAPTERS.find(c=>c.id===story.chapterId);
+ const votesA = Object.values(story.votes).filter(v=>v==='a').length;
+ const votesB = Object.values(story.votes).filter(v=>v==='b').length;
+ return `<div class="card" style="border-color:var(--gold);">
+   <div class="stamp">${story.isFinal?'終章':'養成故事'}</div>
+   <h3 style="margin-top:8px;">${ch.title}</h3>
+   <div class="paper">${ch.text}</div>
+   <div class="muted" style="margin-top:8px;">A：${ch.a.label}（${votesA}票）／ B：${ch.b.label}（${votesB}票）</div>
+   <div class="muted">已投票：${Object.keys(story.votes).length}/${s.players.length}</div>
+   <button class="btn-gold" id="btnResolveStory" style="margin-top:8px;">公布結果</button>
+ </div>`;
+}
+
+function viewPlayerMain(){
+ const s=STATE, p=findPlayer(s,MYID);
+ if(!p) return '<div class="card">找不到你的資料。</div>';
+ const isMyTurn = s.players[s.currentIdx].id===MYID;
+ const task = HIDDEN_TASKS.find(t=>t.id===p.hiddenTaskId);
+ return `
+ <div class="card">
+   <div class="row" style="justify-content:space-between;">
+     <h3 style="margin:0;">${p.name}</h3>
+     <span class="pill">${isMyTurn?'輪到你了！':'等待中'}</span>
+   </div>
+   <div class="statgrid" style="margin-top:10px;">
+     <div><div class="n">${p.funds}</div><div class="l">經費</div></div>
+     <div><div class="n">${p.inspiration}</div><div class="l">靈感值</div></div>
+     <div><div class="n">${p.stamina}</div><div class="l">體力</div></div>
+     <div><div class="n">${p.favor}</div><div class="l">好感度</div></div>
+     <div><div class="n">${p.gp}</div><div class="l">GP</div></div>
+     <div><div class="n">${p.pos}</div><div class="l">位置</div></div>
+   </div>
+ </div>
+
+ ${s.currentStory? storyVoteHTML(s,p): ''}
+
+ ${isMyTurn && !s.currentStory? turnActionsHTML(s,p): ''}
+
+ <div class="card">
+   <h3>隱藏任務</h3>
+   ${task? `<div class="paper">${task.name}<div class="muted" style="color:#6b5b45;margin-top:4px;">進度：${p.taskProgress}/${task.target}</div></div>
+     <div class="row" style="margin-top:8px;">
+       <button class="btn-sage" id="btnTaskProgress" ${p.taskDone?'disabled':''}>完成一次 +1</button>
+     </div>` : '<div class="muted">尚未分配</div>'}
+ </div>
+
+ <div class="card">
+   <h3>好感度兌換（凹特權）</h3>
+   <div class="playerlist">
+   ${FAVOR_MENU.map(f=>`<div class="taskitem"><span>${f.name}<br><span class="muted">花費${f.cost}好感度・${f.desc}</span></span><button class="btn-line" data-favor="${f.id}" ${p.favor<f.cost?'disabled':''}>兌換</button></div>`).join('')}
+   </div>
+ </div>
+
+ <div class="card">
+   <h3>猜猜看：其他人的隱藏任務</h3>
+   <div class="row" style="flex-direction:column;align-items:stretch;">
+     <select id="selTarget">${s.players.filter(pl=>pl.id!==MYID).map(pl=>`<option value="${pl.id}">${pl.name}</option>`).join('')}</select>
+     <select id="selTask">${HIDDEN_TASKS.map(t=>`<option value="${t.id}">${t.name}</option>`).join('')}</select>
+     <button class="btn-line" id="btnGuess" style="margin-top:6px;">送出猜測</button>
+   </div>
+ </div>
+
+ <div class="card">
+   <h3>紀錄</h3>
+   <div class="log">${s.log.slice(0,15).map(l=>`<div>${l}</div>`).join('')}</div>
+ </div>`;
+}
+function storyVoteHTML(s,p){
+ const story = s.currentStory;
+ const ch = story.isFinal? FINAL_CHAPTER: STORY_CHAPTERS.find(c=>c.id===story.chapterId);
+ const myVote = story.votes[MYID];
+ return `<div class="card" style="border-color:var(--gold);">
+   <div class="stamp">${story.isFinal?'終章投票':'故事投票'}</div>
+   <h3 style="margin-top:8px;">${ch.title}</h3>
+   <div class="paper">${ch.text}</div>
+   <div class="row" style="margin-top:10px;">
+     <button class="${myVote==='a'?'btn-gold':'btn-line'}" data-vote="a">A：${ch.a.label}</button>
+     <button class="${myVote==='b'?'btn-gold':'btn-line'}" data-vote="b">B：${ch.b.label}</button>
+   </div>
+   ${myVote? '<div class="muted" style="margin-top:6px;">已送出投票，等待其他人…</div>':''}
+ </div>`;
+}
+function turnActionsHTML(s,p){
+ let extra='';
+ if(p._canClaim!==undefined){}
+ const tile = TILES[p.pos];
+ const a = s.assets[aKey(p.pos)];
+ if(tile.t==='asset' && !a){
+   extra += `<button class="btn-gold" id="btnClaim" data-tile="${p.pos}">認領此地（花${tile.price}經費）</button>`;
+ }
+ if(tile.t==='asset' && a && a.owner===MYID && tile.upgrade && !a.upgraded){
+   extra += `<button class="btn-line" id="btnUpgrade" data-tile="${p.pos}">升級：${tile.upgrade.name}（花${tile.upgrade.cost}經費）</button>`;
+ }
+ return `<div class="card">
+   <h3>你的回合</h3>
+   <div class="row">
+     <button class="btn-gold" id="btnRoll" ${p._rolled?'disabled':''}>擲骰子</button>
+     ${extra}
+     <button class="btn-coral" id="btnEndTurn" ${p._rolled?'':'disabled'}>結束回合</button>
+   </div>
+ </div>`;
+}
+
+function viewEnded(){
+ const s=STATE;
+ const titles = computeTitles(s);
+ const collective = s.storyUnlocked.length<6 ? {name:'結局C・未完待續', text:'畢業前最後一週，你們幾個人窩在系辦聊起這學期系館流傳的那些傳聞，結果每個人手上的拼圖都缺了一角，怎麼兜都兜不完整。有些故事，本來就不急著在今晚說完。'} :
+   s.finalEnding==='a' ? {name:'結局A・薪火相傳', text:'小研留了下來。隔年迎新，她站在講台前，看著台下一張張跟當年的自己一樣手足無措的臉，忍不住笑了出來。'} :
+   {name:'結局B・瀟灑轉身', text:'小研婉拒了。她把辦公桌抽屜裡的雜物一件件清出來，回頭看了一眼這個待了好幾年的地方，然後轉身走出系館，沒有再回頭。'};
+ return `
+ <div class="card" style="text-align:center;">
+   <div class="stamp">結算</div>
+   <h2>遊戲結束</h2>
+ </div>
+ <div class="card">
+   <h3>集體結局</h3>
+   <div class="paper"><b>${collective.name}</b><br><br>${collective.text}</div>
+ </div>
+ <div class="card">
+   <h3>個人結局</h3>
+   ${s.players.map(p=>{const e=personalEnding(p); return `<div class="paper" style="margin-bottom:10px;"><b>${p.name}：${e.name}</b><br>GP ${p.gp}・好感度 ${p.favor}<br><br>${e.text}</div>`;}).join('')}
+ </div>
+ <div class="card">
+   <h3>戲謔頭銜</h3>
+   <div class="playerlist">${titles.map(t=>`<div class="prow"><span>${t.title}</span><span>${t.who}（${t.why}）</span></div>`).join('')}</div>
+ </div>`;
+}
+
+/* ============ 事件綁定 ============ */
+function bindEvents(){
+ const $=id=>document.getElementById(id);
+ if($('btnGoHost')) $('btnGoHost').onclick=()=>{ ROLE='host'; render(); };
+ if($('btnGoPlayer')) $('btnGoPlayer').onclick=()=>{ ROLE='player'; render(); };
+
+ if($('btnCreateRoom')) $('btnCreateRoom').onclick=async ()=>{
+   const code=genCode(); const st=initState();
+   await saveRoom(code, st); ROOM=code; STATE=st; startPolling(); render();
+ };
+
+ if($('btnJoin')) $('btnJoin').onclick=async ()=>{
+   const btn=$('btnJoin'); const errEl=$('joinErr');
+   const code=($('inCode').value||'').toUpperCase().trim();
+   const name=($('inName').value||'').trim();
+   errEl.textContent='';
+   if(!code||!name){ errEl.textContent='請輸入房間代碼與名字'; return; }
+   btn.disabled=true; btn.textContent='連線中…';
+   let timeoutHit=false;
+   const timeoutId=setTimeout(()=>{ timeoutHit=true; errEl.textContent='連線逾時超過8秒，請檢查：1) 手機網路是否正常 2) Firebase資料庫規則是否已開放讀寫 3) databaseURL是否正確'; btn.disabled=false; btn.textContent='加入'; },8000);
+   try{
+     const st = await loadRoom(code);
+     if(timeoutHit) return;
+     clearTimeout(timeoutId);
+     if(!st){ errEl.textContent='找不到這個房間，請確認代碼是否正確（房間代碼區分不到大小寫，但要完全一致）'; btn.disabled=false; btn.textContent='加入'; return; }
+     let existing = st.players.find(pp=>pp.name===name);
+     if(!existing){
+       if(st.phase!=='setup'){ errEl.textContent='遊戲已經開始，無法加入新玩家'; btn.disabled=false; btn.textContent='加入'; return; }
+       existing = newPlayer('p'+Date.now()+Math.floor(Math.random()*999), name);
+       st.players.push(existing);
+       await saveRoom(code, st);
+     }
+     ROOM=code; MYID=existing.id; MYNAME=name; STATE=st; startPolling(); render();
+   }catch(e){
+     clearTimeout(timeoutId);
+     console.error(e);
+     errEl.textContent='發生錯誤：'+String(e && e.message || e);
+     btn.disabled=false; btn.textContent='加入';
+   }
+ };
+
+ if($('btnSubmitSurvey')) $('btnSubmitSurvey').onclick=async ()=>{
+   const answers = Array.from(document.querySelectorAll('.svInput')).map(inp=>inp.value.trim()||'（沒填）');
+   await updateRoom(ROOM, st=>{
+     const p = findPlayer(st, MYID);
+     p.survey = answers;
+     answers.forEach((a,i)=> st.surveyPool.push({owner:p.name, q:SURVEY_QUESTIONS[i], a, used:false}));
+   });
+   await refresh();
+ };
+
+ if($('btnStartGame')) $('btnStartGame').onclick=async ()=>{
+   await updateRoom(ROOM, st=>{
+     st.phase='playing';
+     st.turnOrder = st.players.map(p=>p.id);
+     const tasks = shuffle(HIDDEN_TASKS);
+     st.players.forEach((p,i)=>{ p.hiddenTaskId = tasks[i%tasks.length].id; });
+     pushLog(st,'遊戲開始！隱藏任務已隨機分配給每位玩家。');
+   });
+   await refresh();
+ };
+
+ if($('btnRoll')) $('btnRoll').onclick=async ()=>{
+   await updateRoom(ROOM, st=>{
+     const p = st.players[st.currentIdx];
+     if(p.id!==MYID) return;
+     const dice = Math.ceil(Math.random()*6);
+     const log=[];
+     if(p.inJail){ p.inJail=false; }
+     movePlayer(st,p,dice,log);
+     const oldExtras = {};
+     resolveTile(st,p,p.pos,log);
+     log.forEach(l=>pushLog(st,l));
+     st.lastEvent = '擲出 '+dice+' 點，移動到 '+p.pos+'（'+TILES[p.pos].name+'）';
+     pushLog(st, p.name+' '+st.lastEvent);
+     p._rolled=true;
+     if(p._triggerStory){ delete p._triggerStory; triggerStory(st); }
+   });
+   await refresh();
+ };
+
+ if($('btnClaim')) $('btnClaim').onclick=async ()=>{
+   const tileIdx = parseInt($('btnClaim').dataset.tile,10);
+   await updateRoom(ROOM, st=>{
+     const p = findPlayer(st, MYID); const tile=TILES[tileIdx];
+     if(p.funds>=tile.price && !st.assets[aKey(tileIdx)]){
+       p.funds-=tile.price; st.assets[aKey(tileIdx)]={owner:MYID, upgraded:false};
+       pushLog(st, p.name+' 認領了 '+tile.name+'！');
+     }
+   });
+   await refresh();
+ };
+ if($('btnUpgrade')) $('btnUpgrade').onclick=async ()=>{
+   const tileIdx = parseInt($('btnUpgrade').dataset.tile,10);
+   await updateRoom(ROOM, st=>{
+     const p = findPlayer(st, MYID); const tile=TILES[tileIdx]; const a=st.assets[aKey(tileIdx)];
+     if(a && a.owner===MYID && p.funds>=tile.upgrade.cost && !a.upgraded){
+       p.funds-=tile.upgrade.cost; a.upgraded=true;
+       pushLog(st, p.name+' 把 '+tile.name+' 升級為「'+tile.upgrade.name+'」！');
+     }
+   });
+   await refresh();
+ };
+
+ if($('btnEndTurn')) $('btnEndTurn').onclick=async ()=>{
+   await updateRoom(ROOM, st=>{
+     const p = st.players[st.currentIdx];
+     if(p.id!==MYID) return;
+     p._rolled=false;
+     st.currentIdx = (st.currentIdx+1)%st.players.length;
+     if(st.currentIdx===0){ st.round++; }
+     pushLog(st, '輪到 '+st.players[st.currentIdx].name+' 了。');
+   });
+   await refresh();
+ };
+
+ if($('btnTaskProgress')) $('btnTaskProgress').onclick=async ()=>{
+   await updateRoom(ROOM, st=>{
+     const p = findPlayer(st, MYID); const task=HIDDEN_TASKS.find(t=>t.id===p.hiddenTaskId);
+     if(!task || p.taskDone) return;
+     p.taskProgress++;
+     if(p.taskProgress>=task.target){
+       p.taskDone=true; p.taskAnnounced=true; p.taskDoneRound=st.round;
+       const rewardFunds = task.tier===2?4:3, rewardGP = task.tier===2?2:1;
+       p.funds+=rewardFunds; p.gp+=rewardGP;
+       pushLog(st, '🎉 '+p.name+' 完成了隱藏任務：'+task.name+'！獲得經費+'+rewardFunds+'、GP+'+rewardGP);
+     }
+   });
+   await refresh();
+ };
+
+ document.querySelectorAll('[data-favor]').forEach(btn=>{
+   btn.onclick=async ()=>{
+     const id=btn.dataset.favor;
+     await updateRoom(ROOM, st=>{
+       const p=findPlayer(st,MYID); const f=FAVOR_MENU.find(x=>x.id===id);
+       if(p.favor<f.cost) return;
+       p.favor-=f.cost;
+       if(id==='jail'){ p.pos=10; p.inJail=false; pushLog(st,p.name+' 花好感度凹教授通融，跳出進度報告地獄。'); }
+       if(id==='toll'){ pushLog(st,p.name+' 花好感度凹教授網開一面，免除本次通行費。'); }
+       if(id==='peek'){ pushLog(st,p.name+' 花好感度偷看了一眼下一張卡。'); }
+       if(id==='auto'){ p.gp+=2; pushLog(st,p.name+' 花好感度讓教授特別放水，直接視為最佳結果！GP+2。'); }
+     });
+     await refresh();
+   };
+ });
+
+ if($('btnGuess')) $('btnGuess').onclick=async ()=>{
+   const targetId=$('selTarget').value, taskId=$('selTask').value;
+   await updateRoom(ROOM, st=>{
+     const guesser=findPlayer(st,MYID), target=findPlayer(st,targetId);
+     if(target.taskAnnounced){ pushLog(st,'該任務已公告，無法再猜。'); return; }
+     if(target.hiddenTaskId===taskId){
+       guesser.gp+=1; guesser.funds+=2; guesser.guessCorrect++;
+       target.taskDone=true; target.taskAnnounced=true;
+       target.guessedAgainstCount++;
+       pushLog(st, guesser.name+' 猜中了 '+target.name+' 的隱藏任務！獎勵轉移給猜中者。');
+     } else {
+       guesser.funds-=1; guesser.guessWrong++;
+       pushLog(st, guesser.name+' 猜錯了 '+target.name+' 的隱藏任務，經費-1。');
+     }
+   });
+   await refresh();
+ };
+
+ document.querySelectorAll('[data-vote]').forEach(btn=>{
+   btn.onclick=async ()=>{
+     const v=btn.dataset.vote;
+     await updateRoom(ROOM, st=>{ if(st.currentStory) st.currentStory.votes[MYID]=v; });
+     await refresh();
+   };
+ });
+ if($('btnResolveStory')) $('btnResolveStory').onclick=async ()=>{
+   await updateRoom(ROOM, st=>resolveStory(st));
+   await refresh();
+ };
+
+ if($('btnEndGame')) $('btnEndGame').onclick=async ()=>{
+   await updateRoom(ROOM, st=>{ st.phase='ended'; pushLog(st,'遊戲結束，進入結算。'); });
+   await refresh();
+ };
+}
+
+function triggerStory(state){
+ if(state.currentStory) return;
+ if(state.storyUnlocked.length<6){
+   const remain = STORY_CHAPTERS.filter(c=>!state.storyUnlocked.includes(c.id));
+   const pick = remain[Math.floor(Math.random()*remain.length)];
+   state.currentStory = {chapterId:pick.id, votes:{}, isFinal:false};
+   pushLog(state, '觸發養成故事小遊戲：《'+pick.title+'》，全場投票決定劇情走向！');
+ } else if(!state.finalResolved){
+   state.currentStory = {votes:{}, isFinal:true};
+   pushLog(state, '6則章節全部解鎖！觸發終章〈畢業前夕的抉擇〉，全場投票決定最終結局！');
+ } else {
+   pushLog(state, '小研的故事已經說完了（都市傳說已無新進展）。');
+ }
+}
+function resolveStory(state){
+ const story=state.currentStory; if(!story) return;
+ const votesA=Object.values(story.votes).filter(v=>v==='a').length;
+ const votesB=Object.values(story.votes).filter(v=>v==='b').length;
+ const winner = votesB>votesA? 'b':'a';
+ if(story.isFinal){
+   state.finalEnding = winner; state.finalResolved=true;
+   pushLog(state, '終章投票結果：選項'+winner.toUpperCase()+' 勝出！');
+ } else {
+   const ch = STORY_CHAPTERS.find(c=>c.id===story.chapterId);
+   const opt = ch[winner];
+   const r = opt.fx();
+   const triggerPlayer = state.players.find(p=>p.pos===36) || state.players[state.currentIdx];
+   if(r.xiaoyan) state.xiaoyanFavor+=r.xiaoyan;
+   if(r.allD) state.players.forEach(p=>applyDelta(p,r.allD));
+   if(r.triggerD && triggerPlayer) applyDelta(triggerPlayer,r.triggerD);
+   state.storyUnlocked.push(ch.id);
+   pushLog(state, '《'+ch.title+'》投票結果：選項'+winner.toUpperCase()+'勝出——'+opt.label);
+   state.currentStory=null;
+   if(state.storyUnlocked.length>=6 && !state.finalResolved){ triggerStory(state); return; }
+ }
+ state.currentStory=null;
+}
+
+/* ============ 即時同步 ============ */
+let unsubRef=null;
+async function refresh(){
+ const st = await safeLoadRoom(ROOM);
+ if(st){ STATE=st; render(); }
+}
+function startPolling(){
+ if(unsubRef) { unsubRef.off('value'); }
+ const r = roomRef(ROOM);
+ r.on('value', snap=>{
+   if(snap.exists()){ STATE = snap.val(); render(); }
+ });
+ unsubRef = r;
+}
+
+render();
+})();
+</script>
