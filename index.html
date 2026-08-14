@@ -52,12 +52,38 @@
 .grw .log div:last-child{ border-bottom:none; }
 .grw .taskitem{ display:flex; justify-content:space-between; align-items:center; background:var(--panel2); padding:10px 12px; border-radius:10px; margin-bottom:8px; font-size:13px; gap:8px; }
 .grw .voteopt{ display:flex; justify-content:space-between; align-items:center; width:100%; }
+
+/* ===== 動畫效果 ===== */
+@keyframes cardEnter{ from{ opacity:0; transform:translateY(-14px) rotateX(-25deg); } to{ opacity:1; transform:translateY(0) rotateX(0); } }
+.grw .card-pop{ animation:cardEnter .45s cubic-bezier(.2,.8,.3,1.2); transform-origin:top center; }
+
+@keyframes floatUp{ 0%{ opacity:0; transform:translate(-50%,4px) scale(.9); } 15%{ opacity:1; transform:translate(-50%,-4px) scale(1.05); } 100%{ opacity:0; transform:translate(-50%,-30px) scale(1); } }
+.grw .fdelta{ position:absolute; left:50%; top:-6px; font-weight:800; font-size:13px; pointer-events:none; animation:floatUp 1.3s ease-out forwards; z-index:5; white-space:nowrap; }
+.grw .fdelta.pos{ color:var(--sage); }
+.grw .fdelta.neg{ color:var(--coral); }
+.grw .statgrid div{ position:relative; overflow:visible; }
+
+@keyframes bannerDrop{ 0%{ transform:translate(-50%,-120%); opacity:0; } 12%{ transform:translate(-50%,0); opacity:1; } 88%{ transform:translate(-50%,0); opacity:1; } 100%{ transform:translate(-50%,-120%); opacity:0; } }
+.grw .taskBanner{ position:fixed; left:50%; top:14px; transform:translate(-50%,-120%); z-index:200; background:linear-gradient(180deg,#ffe9ad,#f3c968); color:#3a2707; border:2px solid var(--gold); border-radius:14px; padding:14px 26px; font-weight:800; font-size:15px; box-shadow:0 8px 24px rgba(0,0,0,.18); animation:bannerDrop 4.2s ease-in-out forwards; text-align:center; max-width:90vw; }
+
+@keyframes confettiFall{ 0%{ transform:translateY(-10px) rotate(0deg); opacity:1; } 100%{ transform:translateY(240px) rotate(360deg); opacity:0; } }
+.grw .confettiPiece{ position:fixed; top:0; width:9px; height:14px; border-radius:2px; z-index:199; animation:confettiFall 1.6s ease-in forwards; pointer-events:none; }
+
+@keyframes flashPulse{ 0%{ box-shadow:0 0 0 0 rgba(201,138,43,.55); } 100%{ box-shadow:0 0 0 26px rgba(201,138,43,0); } }
+.grw .flashResult{ animation:flashPulse .9s ease-out; }
+
+@keyframes diceSpin{ 0%,100%{ transform:scale(1) rotate(0deg); } 50%{ transform:scale(1.08) rotate(8deg); } }
+.grw .diceOverlay{ position:fixed; inset:0; background:rgba(42,36,32,.45); display:flex; align-items:center; justify-content:center; z-index:300; }
+.grw .diceBox{ background:#fff; border-radius:22px; width:120px; height:120px; display:flex; align-items:center; justify-content:center; font-size:56px; font-weight:800; font-family:'Noto Serif TC',serif; color:var(--gold); box-shadow:0 10px 40px rgba(0,0,0,.3); animation:diceSpin .18s infinite; }
+
+.grw .pawn{ transition:none; }
 @media (max-width:720px){
   .grw .board{ display:none; }
   .grw-wrap{ padding:16px 12px 60px; }
 }
 </style>
 <div class="grw" id="grwRoot"><div class="grw-wrap" id="grwApp"></div></div>
+<div id="grwOverlay"></div>
 <script>
 (function(){
 "use strict";
@@ -164,7 +190,7 @@ const HIDDEN_TASKS = [
  {id:'t3', name:'不被察覺地主動幫3位玩家倒水／遞東西', target:3, tier:1},
  {id:'t4', name:'趁別人沒注意，偷偷把另一位玩家的隨身小物調換位置', target:3, tier:2},
  {id:'t5', name:'不被發現地促成2位玩家聊起同一個話題', target:2, tier:2},
- {id:'t6', name:'記住某玩家的資源，結束前準確說出他的經費或GP', target:1, tier:2},
+ {id:'t6', name:'不被發現地讓另一位玩家主動拿飲料／食物給你吃', target:1, tier:2},
  {id:'t7', name:'找機會讓另一位玩家主動稱讚你一次', target:1, tier:2},
 ];
 
@@ -467,6 +493,112 @@ let ROLE=null, ROOM=null, MYID=null, MYNAME=null, STATE=null, POLL=null;
 let SURVEY_DRAFT=[]; // 問卷本地暫存：即使因為別人動作觸發重繪，輸入內容也不會被清空
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 const app = document.getElementById('grwApp');
+const overlayEl = document.getElementById('grwOverlay');
+
+/* ===== 動畫輔助函式 ===== */
+function playDiceOverlay(){
+ return new Promise(resolve=>{
+   const box = document.createElement('div');
+   box.className='diceOverlay';
+   box.innerHTML = '<div class="diceBox" id="diceFace">🎲</div>';
+   overlayEl.appendChild(box);
+   const face = box.querySelector('#diceFace');
+   let n=0;
+   const spin = setInterval(()=>{ n=1+Math.floor(Math.random()*6); face.textContent=n; }, 70);
+   setTimeout(()=>{ clearInterval(spin); box.remove(); resolve(); }, 650);
+ });
+}
+function showTaskBanner(text){
+ const el = document.createElement('div');
+ el.className='taskBanner';
+ el.textContent = text;
+ overlayEl.appendChild(el);
+ setTimeout(()=>{ el.remove(); }, 4300);
+}
+function showConfetti(){
+ const colors=['#c98a2b','#b03a3a','#3f7a52','#3f6fa8','#8a4fb0'];
+ for(let i=0;i<26;i++){
+   const p=document.createElement('div');
+   p.className='confettiPiece';
+   p.style.left=(Math.random()*100)+'vw';
+   p.style.background=colors[i%colors.length];
+   p.style.animationDelay=(Math.random()*.3)+'s';
+   overlayEl.appendChild(p);
+   setTimeout(()=>p.remove(), 2000);
+ }
+}
+// 追蹤上一次已知的數值/狀態，用來判斷「這次要不要播動畫」
+let PREV_PLAYER_STATS = {}; // playerId -> {funds,inspiration,stamina,favor,gp}
+function statBadge(playerId, stat, curVal){
+ PREV_PLAYER_STATS[playerId] = PREV_PLAYER_STATS[playerId] || {};
+ const prevVal = PREV_PLAYER_STATS[playerId][stat];
+ PREV_PLAYER_STATS[playerId][stat] = curVal;
+ if(prevVal===undefined || prevVal===curVal) return '';
+ const delta = curVal-prevVal;
+ const cls = delta>0? 'pos':'neg';
+ return '<span class="fdelta '+cls+'">'+(delta>0?'+':'')+delta+'</span>';
+}
+let LAST_CARD_KEY=null;
+function isNewCard(card){
+ if(!card) return false;
+ const key = card.player+'|'+card.text;
+ const isNew = key!==LAST_CARD_KEY;
+ LAST_CARD_KEY = key;
+ return isNew;
+}
+let PREV_ANNOUNCED = {}; // taskId+playerId -> true，避免同一次公告重複跳Banner
+let PREV_JUDGE_ACTIVE=false, PREV_STORY_ACTIVE=false;
+function detectCelebrations(st){
+ if(!st) return;
+ st.players.forEach(p=>{
+   const key=p.id+':'+(p.hiddenTaskId||'');
+   if(p.taskAnnounced && !PREV_ANNOUNCED[key]){
+     PREV_ANNOUNCED[key]=true;
+     const task = HIDDEN_TASKS.find(t=>t.id===p.hiddenTaskId);
+     showTaskBanner('🎉 '+p.name+' 完成了隱藏任務：'+(task?task.name:'')+'！');
+   }
+ });
+ const judgeActive = !!st.currentJudge, storyActive = !!st.currentStory;
+ if(PREV_JUDGE_ACTIVE && !judgeActive) showConfetti();
+ if(PREV_STORY_ACTIVE && !storyActive) showConfetti();
+ PREV_JUDGE_ACTIVE=judgeActive; PREV_STORY_ACTIVE=storyActive;
+}
+// 棋子走格動畫（只有主畫面會顯示棋盤，所以只在host角色套用）
+let PAWN_ANIMATING=false;
+let ANIM_SEQ=0; // 每次呼叫都遞增，讓過時的動畫鏈能偵測到自己已經被取代而提早停止，避免用舊資料覆蓋新資料
+function animateAndSetState(newState){
+ const mySeq = ++ANIM_SEQ;
+ if(ROLE!=='host' || !STATE || !newState.players){ STATE=newState; render(); detectCelebrations(newState); return; }
+ if(PAWN_ANIMATING){ STATE=newState; render(); detectCelebrations(newState); return; } // 有動畫在跑，先直接顯示最新結果，讓舊動畫鏈之後自行作廢
+ const moves=[];
+ newState.players.forEach(np=>{
+   const op = STATE.players.find(p=>p.id===np.id);
+   if(op && op.pos!==np.pos){
+     const path=[]; let cur=op.pos, guard=0;
+     while(cur!==np.pos && guard<41){ cur=(cur+1)%40; path.push(cur); guard++; }
+     if(path.length) moves.push({id:np.id, path});
+   }
+ });
+ if(!moves.length){ STATE=newState; render(); detectCelebrations(newState); return; }
+ PAWN_ANIMATING=true;
+ const stepState = JSON.parse(JSON.stringify(STATE));
+ let maxLen = Math.max(...moves.map(m=>m.path.length));
+ let i=0;
+ function step(){
+   if(mySeq!==ANIM_SEQ){ return; } // 已經被更新的資料取代，這條動畫鏈作廢，不再套用舊資料
+   if(i>=maxLen){ PAWN_ANIMATING=false; STATE=newState; render(); detectCelebrations(newState); return; }
+   moves.forEach(m=>{
+     if(i<m.path.length){
+       const pl = stepState.players.find(p=>p.id===m.id);
+       if(pl) pl.pos = m.path[i];
+     }
+   });
+   STATE=stepState; render();
+   i++;
+   setTimeout(step, 130);
+ }
+ step();
+}
 
 function render(){
  try{
@@ -517,7 +649,7 @@ function viewNeedFirebase(){
  </div>`;
 }
 
-const BUILD_VERSION = 'v5-white-theme-fixes';
+const BUILD_VERSION = 'v7-animations';
 function viewLanding(){
  return `
  <div style="text-align:center;padding:40px 0 10px;">
@@ -626,12 +758,18 @@ function viewHostBoard(){
      <div class="card">
        <h3>玩家</h3>
        <div class="playerlist">
-       ${s.players.map((p,i)=>`<div class="prow ${i===s.currentIdx?'active':''}"><span><span class="pawn" style="background:${PAWN_COLORS[i%6]}">${p.name[0]}</span> ${p.name}</span><span>💰${p.funds} 💡${p.inspiration} ⚡${p.stamina} ❤️${p.favor} 🎓${p.gp}</span></div>`).join('')}
+       ${s.players.map((p,i)=>`<div class="prow ${i===s.currentIdx?'active':''}"><span><span class="pawn" style="background:${PAWN_COLORS[i%6]}">${p.name[0]}</span> ${p.name}</span><span class="row" style="gap:7px;">
+         <span style="position:relative;">💰${p.funds}${statBadge(p.id,'funds',p.funds)}</span>
+         <span style="position:relative;">💡${p.inspiration}${statBadge(p.id,'inspiration',p.inspiration)}</span>
+         <span style="position:relative;">⚡${p.stamina}${statBadge(p.id,'stamina',p.stamina)}</span>
+         <span style="position:relative;">❤️${p.favor}${statBadge(p.id,'favor',p.favor)}</span>
+         <span style="position:relative;">🎓${p.gp}${statBadge(p.id,'gp',p.gp)}</span>
+       </span></div>`).join('')}
        </div>
      </div>
      ${s.currentStory? storyPanelHTML(s):''}
      ${s.currentJudge? judgePanelHTML(s):''}
-     ${s.lastCard? `<div class="card"><div class="pill">${s.lastCard.player} 抽到</div><div class="paper" style="margin-top:8px;">${nl2br(s.lastCard.text)}</div></div>`:''}
+     ${s.lastCard? `<div class="card ${isNewCard(s.lastCard)?'card-pop':''}"><div class="pill">${s.lastCard.player} 抽到</div><div class="paper" style="margin-top:8px;">${nl2br(s.lastCard.text)}</div></div>`:''}
      <div class="card">
        <h3>紀錄</h3>
        <div class="log">${s.log.map(l=>`<div>${l}</div>`).join('')}</div>
@@ -683,11 +821,11 @@ function viewPlayerMain(){
      <span class="pill">${isMyTurn?'輪到你了！':'等待中'}</span>
    </div>
    <div class="statgrid" style="margin-top:10px;">
-     <div><div class="ic">💰</div><div class="n">${p.funds}</div><div class="l">經費</div></div>
-     <div><div class="ic">💡</div><div class="n">${p.inspiration}</div><div class="l">靈感值</div></div>
-     <div><div class="ic">⚡</div><div class="n">${p.stamina}</div><div class="l">體力</div></div>
-     <div><div class="ic">❤️</div><div class="n">${p.favor}</div><div class="l">好感度</div></div>
-     <div><div class="ic">🎓</div><div class="n">${p.gp}</div><div class="l">GP</div></div>
+     <div>${statBadge(p.id,'funds',p.funds)}<div class="ic">💰</div><div class="n">${p.funds}</div><div class="l">經費</div></div>
+     <div>${statBadge(p.id,'inspiration',p.inspiration)}<div class="ic">💡</div><div class="n">${p.inspiration}</div><div class="l">靈感值</div></div>
+     <div>${statBadge(p.id,'stamina',p.stamina)}<div class="ic">⚡</div><div class="n">${p.stamina}</div><div class="l">體力</div></div>
+     <div>${statBadge(p.id,'favor',p.favor)}<div class="ic">❤️</div><div class="n">${p.favor}</div><div class="l">好感度</div></div>
+     <div>${statBadge(p.id,'gp',p.gp)}<div class="ic">🎓</div><div class="n">${p.gp}</div><div class="l">GP</div></div>
      <div><div class="ic">📍</div><div class="n">${p.pos}</div><div class="l">位置</div></div>
    </div>
  </div>
@@ -876,6 +1014,8 @@ function bindEvents(){
  };
 
  if($('btnRoll')) $('btnRoll').onclick=async ()=>{
+   const btn=$('btnRoll'); btn.disabled=true;
+   await playDiceOverlay();
    await updateRoom(ROOM, st=>{
      const p = st.players[st.currentIdx];
      if(p.id!==MYID) return;
@@ -918,6 +1058,8 @@ function bindEvents(){
  };
 
  if($('btnRollOral')) $('btnRollOral').onclick=async ()=>{
+   const btn=$('btnRollOral'); if(btn) btn.disabled=true;
+   await playDiceOverlay();
    await updateRoom(ROOM, st=>{
      if(!st.pendingOral || st.pendingOral.playerId!==MYID) return;
      const p = findPlayer(st, MYID);
@@ -1076,13 +1218,13 @@ function resolveJudge(state){
 let unsubRef=null;
 async function refresh(){
  const st = await safeLoadRoom(ROOM);
- if(st){ STATE=st; render(); }
+ if(st){ animateAndSetState(st); }
 }
 function startPolling(){
  if(unsubRef) { unsubRef.off('value'); }
  const r = roomRef(ROOM);
  r.on('value', snap=>{
-   if(snap.exists()){ STATE = normalizeState(snap.val()); render(); }
+   if(snap.exists()){ animateAndSetState(normalizeState(snap.val())); }
  });
  unsubRef = r;
 }
